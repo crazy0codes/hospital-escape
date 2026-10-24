@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { rand, pick } from './audio.js';
+import { Creature } from './creature.js';
 
-const SCALE = 2.1; // zombie model is ~0.83 units tall -> about 1.75 m
-const EYE = 1.55;
+const EYE = 1.4;
+const KILL_DIST = 1.9; // the head reaches about 1 m ahead of the hips, plus the lunge
 const HALF = { x: 2, y: 1.5, z: 2 };
 const STUN_SECONDS = 2.5;
 const STUN_COOLDOWN = 8;
@@ -19,27 +20,12 @@ export class Enemy {
     this.player = player;
 
     this.root = new THREE.Group();
-    const src = models['graveyard/character-zombie'];
-    this.model = src.scene.clone(true);
-    this.model.scale.setScalar(SCALE);
-    this.model.traverse((o) => {
-      if (o.isMesh) {
-        o.castShadow = true;
-        o.receiveShadow = false;
-        o.frustumCulled = false;
-        o.material = o.material.clone();
-        o.material.roughness = 0.9;
-        o.material.metalness = 0;
-        o.material.color.multiplyScalar(0.7);
-      }
-    });
-    this.root.add(this.model);
+    this.creature = new Creature(models['enemy/wendigo']);
+    this.root.add(this.creature.object);
     scene.add(this.root);
-
-    this.mixer = new THREE.AnimationMixer(this.model);
-    this.actions = {};
-    for (const clip of src.animations) this.actions[clip.name] = this.mixer.clipAction(clip);
-    this.current = null;
+    this.mode = 'idle';
+    this.moved = 0; // metres travelled since the last frame, for the gait
+    this.speedNow = 0;
 
     this.pos = new THREE.Vector3();
     this.eye = new THREE.Vector3();
@@ -71,19 +57,15 @@ export class Enemy {
     this.speedBoost = 0; // grows with keys
     this.canSeePlayer = false;
     this.killT = 0;
-    this.play('idle', 0);
+    this.play('idle');
+    this.lastX = this.pos.x; this.lastZ = this.pos.z; this.speedNow = 0;
     this.apply();
   }
 
   // ------------------------------------------------------------------ helpers
-  play(name, fade = 0.25, timeScale = 1) {
-    const next = this.actions[name];
-    if (!next) return;
-    next.timeScale = timeScale;
-    if (this.current === next) return;
-    next.reset().fadeIn(fade).play();
-    this.current?.fadeOut(fade);
-    this.current = next;
+  /** Animation names map to creature modes; the gait speed comes from the real movement. */
+  play(name) {
+    this.mode = { idle: 'idle', walk: 'walk', sprint: 'run', 'emote-no': 'stun', 'attack-melee-right': 'attack' }[name] || 'idle';
   }
 
   setState(s) {
@@ -192,9 +174,16 @@ export class Enemy {
     this.setState(STATE.CHASE);
   }
 
+  animate(dt) {
+    const d = Math.hypot(this.pos.x - this.lastX, this.pos.z - this.lastZ);
+    this.lastX = this.pos.x; this.lastZ = this.pos.z;
+    this.speedNow += ((dt > 0 ? d / dt : 0) - this.speedNow) * Math.min(1, dt * 8);
+    this.creature.update(dt, { mode: this.mode, speed: this.speedNow });
+  }
+
   // ------------------------------------------------------------------ update
   update(dt) {
-    this.mixer.update(dt);
+    this.animate(dt);
     const speedKeys = this.speedBoost;
     this.stunCooldown = Math.max(0, this.stunCooldown - dt);
     const dist = this.distToPlayer();
@@ -203,7 +192,7 @@ export class Enemy {
 
     if (this.state === STATE.DORMANT) {
       this.sinceWake += dt;
-      this.play('idle', 0.3, 0.6);
+      this.play('idle');
       if (this.sinceWake > 90) this.wake();
       else if (dist < 4 && this.sees()) this.wake();
       this.apply();
@@ -224,7 +213,7 @@ export class Enemy {
     }
 
     // ---- kill
-    if (this.state !== STATE.STUNNED && dist < 1.15 && this.physics.clearLine(this.eye, this.player.eye)) {
+    if (this.state !== STATE.STUNNED && dist < KILL_DIST && this.physics.clearLine(this.eye, this.player.eye)) {
       this.kill();
       return;
     }
@@ -263,26 +252,26 @@ export class Enemy {
     }
     if (this.timer > 0) {
       this.timer -= dt;
-      this.play('idle', 0.3, 0.7);
+      this.play('idle');
       if (this.timer <= 0) this.nextPatrol();
       return;
     }
     const moving = this.follow(dt, this.patrolSpeed(), 3.5);
-    if (moving) this.play('walk', 0.3, this.patrolSpeed() / 1.8);
-    else { this.timer = rand(1.2, 3.0); this.play('idle', 0.3, 0.7); }
+    if (moving) this.play('walk');
+    else { this.timer = rand(1.2, 3.0); this.play('idle'); }
   }
 
   updateInvestigate(dt) {
     if (this.spotPlayerCheck()) return;
     if (this.timer > 0) {
       this.timer -= dt;
-      this.play('idle', 0.3, 0.7);
+      this.play('idle');
       this.face(this.yaw + Math.sin(performance.now() / 700) * 1.2, dt, 1.2);
       if (this.timer <= 0) { this.setState(STATE.PATROL); this.timer = 0; this.nextPatrol(); }
       return;
     }
     const moving = this.follow(dt, this.patrolSpeed() + 0.3, 4);
-    if (moving) this.play('walk', 0.3, (this.patrolSpeed() + 0.3) / 1.8);
+    if (moving) this.play('walk');
     else this.timer = 3;
   }
 
@@ -298,7 +287,7 @@ export class Enemy {
     }
     const speed = THREE.MathUtils.lerp(2.0, this.chaseSpeed(), Math.min(this.chaseTime / 2, 1));
     const moving = this.follow(dt, speed, 9);
-    this.play('sprint', 0.15, speed / 3.3);
+    this.play('sprint');
     if (!moving && !this.canSeePlayer) { this.beginSearch(); return; }
     if (this.loseTimer > 6 || this.distToPlayer() > 25) this.beginSearch();
   }
@@ -314,7 +303,7 @@ export class Enemy {
     if (this.spotPlayerCheck()) return;
     if (this.timer > 0) {
       this.timer -= dt;
-      this.play('idle', 0.3, 0.8);
+      this.play('idle');
       this.face(this.yaw + 1.5 * dt * (this.searchLeft % 2 ? 1 : -1), dt, 2);
       if (this.timer <= 0) {
         if (this.searchLeft > 0) {
@@ -326,7 +315,7 @@ export class Enemy {
       return;
     }
     const moving = this.follow(dt, this.patrolSpeed() + 0.5, 5);
-    if (moving) this.play('walk', 0.3, (this.patrolSpeed() + 0.5) / 1.8);
+    if (moving) this.play('walk');
     else this.timer = 2.5;
   }
 
@@ -343,7 +332,7 @@ export class Enemy {
 
   updateStunned(dt) {
     this.timer -= dt;
-    this.play('emote-no', 0.1, 1.6);
+    this.play('emote-no');
     this.follow(dt, 1.3, 2);
     // keep looking at the player while recoiling
     this.face(Math.atan2(this.player.pos.x - this.pos.x, this.player.pos.z - this.pos.z), dt, 4);
@@ -357,7 +346,7 @@ export class Enemy {
     this.killT = 0;
     this.path = [];
     this.face(Math.atan2(this.player.pos.x - this.pos.x, this.player.pos.z - this.pos.z), 1, 100);
-    this.play('attack-melee-right', 0.05, 1);
+    this.play('attack-melee-right');
     this.audio.playAt(this.root, 'scream', { volume: 1, rate: 0.75, ref: 6 });
     this.setState(STATE.KILL);
     this.apply();

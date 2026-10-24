@@ -9,7 +9,7 @@ export const MODEL_NAMES = [
   'furniture/desk', 'furniture/chair', 'furniture/chairDesk', 'furniture/bookcaseClosed', 'furniture/bookcaseOpen',
   'furniture/kitchenCabinet', 'furniture/lampSquareCeiling',
   'furniture/trashcan', 'furniture/cardboardBoxClosed', 'furniture/rugRectangle', 'furniture/books',
-  'graveyard/character-zombie', 'platformer/key', 'platformer/lock', 'prototype/door-sliding-double-wide',
+  'enemy/wendigo', 'platformer/key', 'platformer/lock', 'prototype/door-sliding-double-wide',
   'food/can-small',
 ];
 

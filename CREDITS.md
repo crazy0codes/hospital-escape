@@ -13,6 +13,7 @@ Honest notes:
 ## 3D models (Kenney, CC0)
 | File | Source URL | Licence |
 |---|---|---|
+| enemy/wendigo.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/enemy/wendigo.glb | CC0 1.0 |
 | food/Textures/colormap.png | https://raw.githubusercontent.com/shorepine/kenney/main/3d/food/Textures/colormap.png | CC0 1.0 |
 | food/can-small.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/food/can-small.glb | CC0 1.0 |
 | furniture/bedDouble.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/furniture/bedDouble.glb | CC0 1.0 |
@@ -33,8 +34,6 @@ Honest notes:
 | furniture/trashcan.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/furniture/trashcan.glb | CC0 1.0 |
 | furniture/wall.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/furniture/wall.glb | CC0 1.0 |
 | furniture/wallDoorway.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/furniture/wallDoorway.glb | CC0 1.0 |
-| graveyard/Textures/colormap.png | https://raw.githubusercontent.com/shorepine/kenney/main/3d/graveyard/Textures/colormap.png | CC0 1.0 |
-| graveyard/character-zombie.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/graveyard/character-zombie.glb | CC0 1.0 |
 | platformer/Textures/colormap.png | https://raw.githubusercontent.com/shorepine/kenney/main/3d/platformer/Textures/colormap.png | CC0 1.0 |
 | platformer/key.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/platformer/key.glb | CC0 1.0 |
 | platformer/lock.glb | https://raw.githubusercontent.com/shorepine/kenney/main/3d/platformer/lock.glb | CC0 1.0 |
@@ -78,3 +77,6 @@ Honest notes:
 | audio/steps/footstep_concrete_002.ogg | https://raw.githubusercontent.com/lavenderdotpet/CC0-Public-Domain-Sounds/main/kenney_impactsounds/Audio/footstep_concrete_002.ogg | CC0 1.0 | Kenney (www.kenney.nl), Impact Sounds |
 | audio/steps/footstep_concrete_003.ogg | https://raw.githubusercontent.com/lavenderdotpet/CC0-Public-Domain-Sounds/main/kenney_impactsounds/Audio/footstep_concrete_003.ogg | CC0 1.0 | Kenney (www.kenney.nl), Impact Sounds |
 | audio/steps/footstep_concrete_004.ogg | https://raw.githubusercontent.com/lavenderdotpet/CC0-Public-Domain-Sounds/main/kenney_impactsounds/Audio/footstep_concrete_004.ogg | CC0 1.0 | Kenney (www.kenney.nl), Impact Sounds |
+
+## Stalker model (user-supplied)
+`public/models/enemy/wendigo.glb` comes from the user's own files (`the_human_deer.glb`, Sketchfab). Author and licence are unconfirmed; confirm before any public release.

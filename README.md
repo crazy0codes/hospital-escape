@@ -51,6 +51,6 @@ Tested automatically in headless Chromium (software WebGL), against both dev and
 
 Not tested (no way to here): real GPU frame rate, how the sound mix and scare pacing feel, pointer lock in a real browser window (the tests used a no-lock mode), Safari. Software rendering ran at only a few frames per second, so performance on a laptop is unmeasured. The scene is light (about 130 meshes, 43k triangles, one shadow-casting light) but treat smoothness as unconfirmed.
 
-Known limits: the models are low-poly and flat coloured, so the look comes from darkness, fog and grain. The stalker is a stylised zombie from a CC0 pack, not a realistic character.
+Known limits: the models are low-poly and flat coloured, so the look comes from darkness, fog and grain. The stalker is a user-supplied wendigo model. Its walk, run, stun and attack are posed in code (`src/creature.js`) over a single idle clip; this was checked in a model viewer only, not yet in a full playthrough.
 
 Optional test scripts are in `tools/tests/` (they need `@sparticuz/chromium` and `puppeteer-core`).

@@ -116,7 +116,7 @@ Open risks accepted: sound mix and scare balance cannot be judged by ear here; z
 - Wheelchair scare (stretch goal) was cut, along with its model.
 - Map is 28 x 22 cells. Assets trimmed to what the game uses (27 models, about 34 sounds, 2.6 MB).
 - Final speeds: patrol 1.6 to 2.0 m/s, chase 3.3 to 3.75 m/s (ramps up over 2 s), player walk 2.4 and run 4.0 m/s.
-- Battery cell is a recoloured tin can (food/can-small); notes are a book model; the Patient is the Kenney graveyard zombie.
+- Battery cell is a recoloured tin can (food/can-small); notes are a book model; the Patient is a user-supplied wendigo model (procedural gait, see src/creature.js).
 - Audio is decoded after the Start click so no AudioContext exists before a user gesture.
 
 ## 14. Known limits

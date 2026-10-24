@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta charset="utf-8"><title>view</title><style>body{margin:0;background:#222}canvas{display:block}</style></head>
+<body><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const url = q.get('u'), t = parseFloat(q.get('t') || '0'), yawDeg = parseFloat(q.get('yaw') || '0'), clipIdx = parseInt(q.get('clip') || '0');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(640, 720); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x3a3d44);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x555555, 1.6));
+const d = new THREE.DirectionalLight(0xffffff, 2.2); d.position.set(3, 5, 4); scene.add(d);
+const gltf = await new GLTFLoader().loadAsync(url);
+const root = gltf.scene; scene.add(root);
+const hide = (q.get('hide')||'').split(',').filter(Boolean); const meshInfo = [];
+root.traverse((o)=>{ if (o.isMesh) { const mn = o.material.name; meshInfo.push([o.name, mn, o.geometry.attributes.position.count, o.isSkinnedMesh]); if (hide.includes(mn)) o.visible = false; } });
+let mixer = null;
+if (gltf.animations.length) { mixer = new THREE.AnimationMixer(root); const a = mixer.clipAction(gltf.animations[clipIdx]); a.play(); mixer.setTime(t); }
+root.updateMatrixWorld(true);
+root.traverse((o) => { if (o.isSkinnedMesh) { o.skeleton.update(); } });
+const box = new THREE.Box3().setFromObject(root, true);
+const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+const bones = {}; root.traverse((o)=>{ if (o.isBone && /Head|Hip_J|toe|feet|L_elbow|tail_J_0[1-3]|Neck/.test(o.name)) { const v=new THREE.Vector3(); o.getWorldPosition(v); bones[o.name]=v.toArray().map(x=>+x.toFixed(3)); } });
+const xs=[],ys=[],zs=[]; const tmp=new THREE.Vector3();
+root.traverse((o)=>{ if (o.isSkinnedMesh && o.visible) { const n=o.geometry.attributes.position.count; for(let i=0;i<n;i+=3){ o.getVertexPosition(i,tmp); o.applyBoneTransform(i,tmp); tmp.applyMatrix4(o.matrixWorld); xs.push(tmp.x);ys.push(tmp.y);zs.push(tmp.z);} } });
+const pct=(a,p)=>{a.sort((x,y)=>x-y);return +a[Math.floor(a.length*p)].toFixed(3)};
+const robust={x:[pct(xs,0.01),pct(xs,0.99)],y:[pct(ys,0.005),pct(ys,0.995)],z:[pct(zs,0.01),pct(zs,0.99)]};
+const info = { bones, robust, size: size.toArray().map((v) => +v.toFixed(3)), min: box.min.toArray().map((v) => +v.toFixed(3)), max: box.max.toArray().map((v) => +v.toFixed(3)), clips: gltf.animations.map((a) => a.name + ':' + a.duration.toFixed(2)) };
+const r = Math.max(size.x, size.y, size.z);
+const cam = new THREE.PerspectiveCamera(35, 640 / 720, r * 0.01, r * 20);
+const yaw = THREE.MathUtils.degToRad(yawDeg);
+cam.position.set(center.x + Math.sin(yaw) * r * 1.9, center.y, center.z + Math.cos(yaw) * r * 1.9); cam.lookAt(center);
+renderer.render(scene, cam);
+info.meshes = meshInfo; window.__info = info; document.title = 'done';
+</script></body></html>

@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><title>cview</title><style>body{margin:0;background:#222}canvas{display:block}</style></head>
+<body><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { Creature } from '/src/creature.js';
+const q = new URLSearchParams(location.search);
+const mode = q.get('mode') || 'idle', ph = parseFloat(q.get('ph') || '0'), yawDeg = parseFloat(q.get('yaw') || '90'), t = parseFloat(q.get('t') || '0.5'), att = parseFloat(q.get('att') || '0');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(640, 560); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x3a3d44);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x555555, 1.7));
+const d = new THREE.DirectionalLight(0xffffff, 2.2); d.position.set(3, 5, 4); scene.add(d);
+const grid = new THREE.GridHelper(8, 16, 0x888888, 0x555555); scene.add(grid);
+const gltf = await new GLTFLoader().loadAsync(q.get('u') || '/models/enemy/wendigo.glb');
+const c = new Creature(gltf); scene.add(c.object);
+c.object.rotation.y = 0; // forward is +Z in game space
+// pose: settle weights then apply at a fixed phase
+c.mode = mode; c.phase = ph; c.attackT = att; c.t = t;
+const full = { walk: mode === 'walk' ? 1 : 0, run: mode === 'run' ? 1 : 0, stun: mode === 'stun' ? 1 : 0, attack: mode === 'attack' ? 1 : 0 };
+Object.assign(c.w, full);
+c.idle.time = t; c.mixer.update(0);
+c.object.updateMatrixWorld(true); c.pose(); c.object.updateMatrixWorld(true);
+const cam = new THREE.PerspectiveCamera(32, 640 / 560, 0.1, 50);
+const yaw = THREE.MathUtils.degToRad(yawDeg);
+cam.position.set(Math.sin(yaw) * 6.2, 1.1, Math.cos(yaw) * 6.2); cam.lookAt(0, 0.95, 0);
+renderer.render(scene, cam);
+const box = new THREE.Box3().setFromObject(c.object, true);
+window.__info = { size: box.getSize(new THREE.Vector3()).toArray().map((v) => +v.toFixed(2)), min: box.min.toArray().map((v) => +v.toFixed(2)), bones: Object.keys(c.bones).length, missing: ['C_spine_01_J_018','C_Neck_J_022','C_Head_J_023','C_jaw__J_026','L_upper_leg_J_072','R_upper_leg_J_078','L_knee_J_073','R_knee_J_079','L_ankle_J_074','R_ankle_J_080','L_shoulder_J_034','R_shoulder_J_053','L_elbow_J_035','R_elbow_J_054'].filter((n)=>!c.bones[n]) };
+document.title = 'done';
+</script></body></html>
