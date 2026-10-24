@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>St. Aldric: Night Shift Never Ended</title>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="objective"></div>
+    <div id="crosshair"></div>
+    <div id="prompt" class="hidden"></div>
+    <div id="toast" class="hidden"></div>
+    <div id="meters">
+      <div class="meter"><span>TORCH</span><div class="bar"><i id="batteryBar"></i></div><b id="batteryPct">100%</b></div>
+      <div class="meter"><span>STAMINA</span><div class="bar"><i id="staminaBar"></i></div></div>
+      <div id="keys">KEYS 0 / 3</div>
+    </div>
+  </div>
+
+  <div id="note" class="overlay hidden">
+    <div class="card paper">
+      <p id="noteText"></p>
+      <small>Press E to put it down</small>
+    </div>
+  </div>
+
+  <div id="loading" class="overlay">
+    <div class="card">
+      <h1>St. Aldric</h1>
+      <div class="bar wide"><i id="loadBar"></i></div>
+      <small id="loadText">Loading...</small>
+    </div>
+  </div>
+
+  <div id="title" class="overlay hidden">
+    <div class="card">
+      <h1>St. Aldric</h1>
+      <h2>Night Shift Never Ended</h2>
+      <p>You wake in a closed hospital. Something walks these halls at night.<br>Find three keys. Unlock the exit. Get out.</p>
+      <table class="controls">
+        <tr><td>W A S D</td><td>Move</td></tr>
+        <tr><td>Mouse</td><td>Look</td></tr>
+        <tr><td>Shift</td><td>Run (loud, tires you out)</td></tr>
+        <tr><td>F</td><td>Flashlight</td></tr>
+        <tr><td>E</td><td>Interact</td></tr>
+        <tr><td>Esc</td><td>Pause</td></tr>
+      </table>
+      <button id="startBtn">Click to begin</button>
+      <small>Headphones recommended. Best in a dark room.</small>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="card">
+      <h2>Paused</h2>
+      <button id="resumeBtn">Click to resume</button>
+      <button id="restartBtn2" class="secondary">Restart</button>
+    </div>
+  </div>
+
+  <div id="dead" class="overlay hidden">
+    <div class="card">
+      <h1 class="red">It found you.</h1>
+      <p id="deadText"></p>
+      <button id="restartBtn">Try again</button>
+      <small>Or press R</small>
+    </div>
+  </div>
+
+  <div id="win" class="overlay hidden">
+    <div class="card">
+      <h1>You made it out.</h1>
+      <p id="winText"></p>
+      <button id="winBtn">Play again</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

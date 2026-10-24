@@ -1,0 +1,23 @@
+{
+  "name": "hospital-escape",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "vite --host",
+    "dev": "vite --host",
+    "build": "vite build",
+    "play": "vite build && vite preview --host --port 4173",
+    "preview": "vite preview --host --port 4173"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "@recast-navigation/three": "^0.43.1",
+    "postprocessing": "^6.39.5",
+    "recast-navigation": "^0.43.1",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.5"
+  }
+}
