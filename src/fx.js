@@ -15,14 +15,14 @@ export function createRenderer(canvas) {
 
 export function createWorld() {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x020304);
-  scene.fog = new THREE.FogExp2(0x030405, 0.055);
+  scene.background = new THREE.Color(0x1b2c4c);
+  scene.fog = new THREE.FogExp2(0x111b30, 0.027);
 
-  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 80);
+  const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.05, 90);
   scene.add(camera);
 
   // Dim fill so silhouettes never go fully black.
-  const ambient = new THREE.AmbientLight(0x4a5a70, 0.32);
+  const ambient = new THREE.AmbientLight(0x5a6e92, 0.5);
   scene.add(ambient);
 
   // Flashlight, parented to the camera.

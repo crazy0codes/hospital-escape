@@ -10,7 +10,7 @@ import { Game } from './game.js';
 import { ui } from './ui.js';
 
 const params = new URLSearchParams(location.search);
-const opts = { nolock: params.has('nolock'), debug: params.has('debug') };
+const opts = { nolock: params.has('nolock'), debug: params.has('debug'), night: params.get('night') ? parseFloat(params.get('night')) : 0 };
 
 async function main() {
   ui.screen('loading');
@@ -24,7 +24,7 @@ async function main() {
   ui.loading(0.7, 'Loading sounds...');
   const soundBytes = await loadSoundBytes((f) => ui.loading(f, 'Loading sounds...'));
 
-  ui.loading(0.95, 'Building the hospital...');
+  ui.loading(0.95, 'Building the lodge...');
   await initRecast();
   const physics = await Physics.create();
   const level = buildLevel(models);
@@ -41,7 +41,7 @@ async function main() {
   game.run();
   ui.loading(1, 'Ready');
   ui.screen('title');
-  document.title = 'St. Aldric: Night Shift Never Ended';
+  document.title = 'Hunger Moon';
   window.__ready = true;
 }
 

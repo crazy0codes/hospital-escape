@@ -49,3 +49,7 @@ button.secondary { color: var(--dim); }
 #batteryBar.low { background: var(--red); animation: pulse 0.8s infinite; }
 @keyframes pulse { 50% { opacity: 0.35; } }
 @media (max-width: 700px) { #meters { width: 180px; } }
+
+#clockText { position: absolute; top: 16px; right: 22px; font-size: 22px; letter-spacing: 0.2em; color: var(--amber); text-shadow: 0 0 8px #000; }
+#fireBar { background: #f08a2a; }
+#fireBar.low { background: var(--red); animation: pulse 0.8s infinite; }

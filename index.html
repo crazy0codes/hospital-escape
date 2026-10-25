@@ -3,20 +3,22 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>St. Aldric: Night Shift Never Ended</title>
+  <title>Hunger Moon</title>
 </head>
 <body>
   <canvas id="game"></canvas>
 
   <div id="hud" class="hidden">
     <div id="objective"></div>
+    <div id="clockText">22:00</div>
     <div id="crosshair"></div>
     <div id="prompt" class="hidden"></div>
     <div id="toast" class="hidden"></div>
     <div id="meters">
       <div class="meter"><span>TORCH</span><div class="bar"><i id="batteryBar"></i></div><b id="batteryPct">100%</b></div>
       <div class="meter"><span>STAMINA</span><div class="bar"><i id="staminaBar"></i></div></div>
-      <div id="keys">KEYS 0 / 3</div>
+      <div class="meter"><span>FIRE</span><div class="bar"><i id="fireBar"></i></div><b id="fireSecs">70s</b></div>
+      <div id="keys">LOGS 0 / 4</div>
     </div>
   </div>
 
@@ -29,7 +31,7 @@
 
   <div id="loading" class="overlay">
     <div class="card">
-      <h1>St. Aldric</h1>
+      <h1>Hunger Moon</h1>
       <div class="bar wide"><i id="loadBar"></i></div>
       <small id="loadText">Loading...</small>
     </div>
@@ -37,15 +39,15 @@
 
   <div id="title" class="overlay hidden">
     <div class="card">
-      <h1>St. Aldric</h1>
-      <h2>Night Shift Never Ended</h2>
-      <p>You wake in a closed hospital. Something walks these halls at night.<br>Find three keys. Unlock the exit. Get out.</p>
+      <h1>Hunger Moon</h1>
+      <h2>Survive until dawn</h2>
+      <p>Snowed in. Something that hungers for warmth circles the lodge. It will not cross the light of a strong fire.<br>Feed the hearth with wood from the sheds. When the fire dies, it comes in.</p>
       <table class="controls">
         <tr><td>W A S D</td><td>Move</td></tr>
         <tr><td>Mouse</td><td>Look</td></tr>
         <tr><td>Shift</td><td>Run (loud, tires you out)</td></tr>
         <tr><td>F</td><td>Flashlight</td></tr>
-        <tr><td>E</td><td>Interact</td></tr>
+        <tr><td>E</td><td>Take wood, feed the fire, read</td></tr>
         <tr><td>Esc</td><td>Pause</td></tr>
       </table>
       <button id="startBtn">Click to begin</button>

@@ -3,10 +3,18 @@ import { Player, BATTERY_PICKUP } from './player.js';
 import { Enemy, STATE } from './enemy.js';
 import { GameAudio, rand, pick } from './audio.js';
 import { ui } from './ui.js';
-import { C, S } from './level.js';
+import { S } from './level.js';
+import { Fire, Snowfall, LOG_FUEL, MAX_FUEL } from './fire.js';
+import * as TX from './textures.js';
 
 const STEPS = ['step0', 'step1', 'step2', 'step3', 'step4'];
-const DOOR_T = 0.05 * S;
+const MAX_CARRY = 4;
+const START_FUEL = 70;
+const CHAIR_FUEL = 14;
+const NIGHT_DEFAULT = 540; // seconds from 22:00 to dawn
+const DAWN_COLOR = new THREE.Color(0x9fb0cc);
+const NIGHT_COLOR = new THREE.Color(0x111b30);
+const SKY_NIGHT = new THREE.Color(0x1b2c4c);
 
 export class Game {
   constructor({ renderer, composer, fx, world, physics, models, level, query, soundBytes, opts }) {
@@ -16,7 +24,6 @@ export class Game {
     this.scene = world.scene;
     this.camera = world.camera;
     this.flashlight = world.flashlight;
-    this.lampLights = world.lampLights;
     this.ambient = world.ambient;
     this.physics = physics;
     this.models = models;
@@ -24,6 +31,7 @@ export class Game {
     this.soundBytes = soundBytes;
     this.opts = opts;
     this.canvas = renderer.domElement;
+    this.nightLen = opts.night || NIGHT_DEFAULT;
 
     this.scene.add(level.group);
     physics.addStaticBoxes(level.colliders);
@@ -31,25 +39,28 @@ export class Game {
     this.audio = new GameAudio(this.scene, this.camera);
     this.player = new Player(this.camera, physics, this.canvas, { requireLock: !opts.nolock });
     this.enemy = new Enemy({ models, scene: this.scene, level, query, physics, audio: this.audio, player: this.player });
+    this.enemy.safeRadius = () => Fire.safeRadius(this.fuel);
+    this.fire = new Fire(this.scene, level.hearth);
+    this.snow = new Snowfall(this.scene);
 
     this.state = 'title';
     this.time = 0;
-    this.keysFound = 0;
+    this.fuel = START_FUEL;
+    this.logs = 0;
+    this.logsBurned = 0;
     this.batteriesUsed = 0;
     this.flashT = 0;
     this.stingerT = 20;
-    this.alarm = false;
     this.deadT = 0;
+    this.dawnT = 0;
+    this.phase = 0;
     this.clock = new THREE.Clock();
-    this.mixers = [];
 
     this.buildPickups();
-    this.buildExit();
-    this.setupLamps();
     this.bindEvents();
 
     this.player.onStep = (running) => {
-      this.audio.play(pick(STEPS), running ? 0.5 : 0.28, rand(0.9, 1.1));
+      this.audio.play(pick(STEPS), running ? 0.5 : 0.28, rand(0.75, 0.9)); // crunchy: lower rate
       this.enemy.hear(this.player.pos, running ? 12 : 5);
     };
     this.player.onToggleLight = () => this.toggleLight();
@@ -70,7 +81,7 @@ export class Game {
   }
 
   buildPickups() {
-    const { keys, batteries, notes } = this.level.pickups;
+    const { logPiles, chairs, batteries, notes } = this.level.pickups;
     this.pickups = [];
     const make = (name, scale, emissive, intensity) => {
       const o = this.models[name].scene.clone(true);
@@ -80,81 +91,60 @@ export class Game {
       const holder = new THREE.Group();
       holder.add(o);
       holder.scale.setScalar(scale);
-      this.tint(o, emissive, intensity);
+      if (emissive != null) this.tint(o, emissive, intensity);
       this.scene.add(holder);
       return holder;
     };
-    for (const k of keys) {
-      const obj = make('platformer/key', 1.3, 0xffc040, 1.1);
-      this.pickups.push({ type: 'key', index: k.index, pos: k.pos.clone(), obj, taken: false, baseY: k.pos.y, spin: true });
+
+    const bark = new THREE.MeshStandardMaterial({ map: TX.barkTexture(), roughness: 1 });
+    const logGeo = new THREE.CylinderGeometry(0.09, 0.1, 0.78, 7);
+    logGeo.rotateZ(Math.PI / 2);
+    const slots = [[-0.11, 0.09], [0.11, 0.09], [0, 0.26], [0, 0.43]];
+    for (const p of logPiles) {
+      const holder = new THREE.Group();
+      holder.position.copy(p.pos);
+      holder.rotation.y = p.rot;
+      const meshes = [];
+      for (let i = 0; i < p.n; i++) {
+        const m = new THREE.Mesh(logGeo, bark);
+        m.position.set(0, slots[i][1], slots[i][0] * 1.4);
+        m.rotation.y = (Math.random() - 0.5) * 0.25;
+        m.castShadow = true;
+        holder.add(m); meshes.push(m);
+      }
+      this.scene.add(holder);
+      this.pickups.push({ type: 'pile', pos: p.pos.clone().setY(0.3), obj: holder, meshes, n0: p.n, n: p.n, taken: false });
     }
+    chairs.forEach((c, i) => {
+      const obj = make('furniture/chair', S * 0.95, null);
+      obj.position.copy(c.pos);
+      obj.rotation.y = c.rot;
+      obj.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(0.6); o.castShadow = true; } });
+      const blocker = { x: c.pos.x, y: 0.45, z: c.pos.z, hx: 0.3, hy: 0.45, hz: 0.3 };
+      this.pickups.push({ type: 'chair', id: `chair${i}`, pos: c.pos.clone().setY(0.5), obj, blocker, taken: false });
+    });
     for (const b of batteries) {
       const obj = make('food/can-small', 1.0, 0x40ff80, 1.4);
       this.pickups.push({ type: 'battery', pos: b.pos.clone().setY(0.2), obj, taken: false, baseY: 0.12, spin: true });
     }
     for (const n of notes) {
       const obj = make('furniture/books', 1.6, 0xfff0c0, 0.35);
-      this.pickups.push({ type: 'note', text: n.text, pos: n.pos.clone(), obj, taken: false, baseY: n.pos.y - 0.08, spin: false });
+      this.pickups.push({ type: 'note', text: n.text, pos: n.pos.clone(), obj, taken: false, baseY: 0.384 * S - 0.05 + 0.0, onTable: true });
     }
-    for (const p of this.pickups) p.obj.position.set(p.pos.x, p.baseY, p.pos.z);
+    // notes lie on the floor or a surface: put them on the floor if no furniture is meant
+    for (const p of this.pickups) {
+      if (p.type === 'battery') p.obj.position.set(p.pos.x, p.baseY, p.pos.z);
+      if (p.type === 'note') { p.baseY = 0; p.obj.position.set(p.pos.x, 0.01, p.pos.z); p.pos.y = 0.25; }
+    }
   }
 
-  buildExit() {
-    const exit = this.level.exitPos;
-    const wallZ = exit.z + DOOR_T / 2;
-    const doorX = exit.x + 0.005 * C;
-    this.exit = { x: doorX, z: wallZ, open: false, opening: 0 };
-
-    const door = this.models['prototype/door-sliding-double-wide'].scene.clone(true);
-    const holder = new THREE.Group();
-    holder.add(door);
-    holder.scale.set(0.34, 2.7, 0.75);
-    holder.rotation.y = Math.PI / 2;
-    holder.position.set(doorX, 0, wallZ);
-    door.traverse((o) => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.multiplyScalar(0.6); o.castShadow = true; } });
-    this.scene.add(holder);
-    this.doorMixer = new THREE.AnimationMixer(door);
-    const clip = this.models['prototype/door-sliding-double-wide'].animations.find((a) => a.name === 'open');
-    this.doorAction = this.doorMixer.clipAction(clip);
-    this.doorAction.setLoop(THREE.LoopOnce, 1);
-    this.doorAction.clampWhenFinished = true;
-
-    const lock = this.models['platformer/lock'].scene.clone(true);
-    const lb = this.models['platformer/lock'].box;
-    const lholder = new THREE.Group();
-    lock.position.set(-lb.getCenter(new THREE.Vector3()).x, -lb.min.y, -lb.getCenter(new THREE.Vector3()).z);
-    lholder.add(lock);
-    lholder.scale.setScalar(1.3);
-    lholder.position.set(exit.x + 0.95 * C * 0.55, 1.15, exit.z - 0.1);
-    lholder.rotation.y = Math.PI;
-    this.tint(lock, 0xff2a1a, 0.8);
-    this.scene.add(lholder);
-    this.lockModel = lock;
-
-    this.blocker = { x: doorX, y: 1.1, z: wallZ, hx: 0.55, hy: 1.1, hz: 0.18 };
-    this.physics.addBlocker('exit', this.blocker);
-  }
-
-  setupLamps() {
-    this.lamps = this.level.lamps;
-    this.lampMatOn = this.lamps[0].matOn;
-    this.lampMatOff = this.lamps[0].matOff;
-  }
-
-  resetLamps() {
-    this.lampMatOn.emissive.set(0xffa24a);
-    this.lampMatOn.color.set(0xffd9a0);
-    this.lamps.forEach((l, i) => {
-      l.dead = i !== 15 && Math.random() < 0.22;
-      l.flicker = 0;
-      l.on = !l.dead;
-      l.next = rand(3, 12);
-      this.setLampVisual(l, l.on);
-    });
-  }
-
-  setLampVisual(l, on) {
-    for (const m of l.meshes) m.material = on ? this.lampMatOn : this.lampMatOff;
+  resetPickups() {
+    for (const p of this.pickups) {
+      p.taken = false;
+      p.obj.visible = true;
+      if (p.type === 'pile') { p.n = p.n0; p.meshes.forEach((m) => { m.visible = true; }); }
+      if (p.type === 'chair') this.physics.addBlocker(p.id, p.blocker);
+    }
   }
 
   // ------------------------------------------------------------------ input and flow
@@ -198,33 +188,33 @@ export class Game {
   }
 
   newRun() {
-    this.keysFound = 0;
-    this.batteriesUsed = 0;
     this.time = 0;
-    this.alarm = false;
+    this.fuel = START_FUEL;
+    this.logs = 0;
+    this.logsBurned = 0;
+    this.batteriesUsed = 0;
     this.deadT = 0;
+    this.dawnT = 0;
+    this.phase = 0;
+    this.dawnStarted = false;
+    this.outageToast = false;
     this.stingerT = rand(18, 28);
-    this.exit.open = false;
-    this.doorAction.stop();
-    this.doorMixer.update(0);
-    this.physics.addBlocker('exit', this.blocker);
     this.audio.stopAll();
-    for (const p of this.pickups) { p.taken = false; p.obj.visible = true; }
+    this.resetPickups();
     this.player.reset(this.level.spawn.pos, this.level.spawn.yaw);
     this.enemy.reset();
-    this.resetLamps();
-    this.lampMatOn.emissiveIntensity = 1.7;
+    this.enemy.speedBoost = 0;
     this.audio.resume();
-    this.audio.loop('amb1', 'ambient1', 0.26);
-    this.audio.loop('amb3', 'ambient3', 0.16, 0.8);
-    this.audio.loop('noise', 'noise1', 0.05);
+    this.audio.loop('wind', 'wind', 0.2);
+    this.audio.loop('fire', 'crackle', 0.4);
+    this.audio.loop('amb1', 'ambient1', 0.12, 0.7);
     this.audio.loop('drone', 'ambient2', 0.0, 0.5);
     this.player.enabled = true;
     this.state = 'playing';
     ui.screen(null);
     ui.setPrompt(null);
     this.updateObjective();
-    ui.toast('You wake up. The lights are out. Find a way out.', 5000);
+    ui.toast('Snowed in. The hunger moon is up. Keep the fire alive until dawn.', 6500);
     this.clock.getDelta();
   }
 
@@ -247,10 +237,7 @@ export class Game {
     this.clock.getDelta();
   }
 
-  restart() {
-    this.lock();
-    this.newRun();
-  }
+  restart() { this.lock(); this.newRun(); }
 
   onCaught() {
     this.state = 'dying';
@@ -258,7 +245,6 @@ export class Game {
     this.deadT = 0;
     ui.setPrompt(null);
     ui.note(null);
-    this.audio.stopLoop('alarm');
   }
 
   win() {
@@ -266,9 +252,8 @@ export class Game {
     this.player.enabled = false;
     this.unlock();
     this.audio.stopAll();
-    this.audio.play('doorOpen', 0.5, 0.8);
-    const t = Math.round(this.time);
-    ui.el.winText.textContent = `Out in ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}. Spare torch cells used: ${this.batteriesUsed}.`;
+    this.audio.play('doorOpen', 0.4, 0.7);
+    ui.el.winText.textContent = `You kept the fire through the night. Logs burned: ${this.logsBurned}. Torch cells used: ${this.batteriesUsed}.`;
     ui.screen('win');
   }
 
@@ -276,9 +261,23 @@ export class Game {
     this.state = 'dead';
     this.unlock();
     this.audio.stopAll();
-    const t = Math.round(this.time);
-    ui.el.deadText.textContent = `Keys found: ${this.keysFound} of 3. You lasted ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}.`;
+    const left = Math.max(0, Math.round(this.nightLen - this.time));
+    ui.el.deadText.textContent = `${this.clockText()}. Dawn was ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} away. The fire was ${this.fuel > 0 ? 'still burning' : 'out'}.`;
     ui.screen('dead');
+  }
+
+  // ------------------------------------------------------------------ helpers
+  clockText(p = this.time / this.nightLen) {
+    const minutes = 22 * 60 + Math.min(1, p) * 8 * 60;
+    const h = Math.floor(minutes / 60) % 24, m = Math.floor(minutes % 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  }
+
+  fireLevel() { return Math.min(1, this.fuel / 60); }
+
+  insideLodge() {
+    const l = this.level.lodge, p = this.player.pos;
+    return p.x > l.x0 && p.x < l.x1 && p.z > l.z0 && p.z < l.z1;
   }
 
   // ------------------------------------------------------------------ actions
@@ -291,26 +290,26 @@ export class Game {
   }
 
   updateObjective() {
-    if (this.exit.open) ui.objective('Get out.');
-    else if (this.keysFound < 3) ui.objective(`Find the 3 keys: ${this.keysFound} / 3`);
-    else ui.objective('All keys found. Unlock the exit at the south end of the hospital.');
+    const left = Math.max(0, Math.ceil(this.nightLen - this.time));
+    ui.objective(`Keep the fire alive until dawn. ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} to go.`);
   }
 
   findTarget() {
     const p = this.player;
     let best = null, bestScore = 0;
     const to = new THREE.Vector3();
-    const consider = (pos, kind, ref) => {
+    const consider = (pos, kind, ref, range = 2.4, minDot = 0.8) => {
       to.subVectors(pos, p.eye);
       const d = to.length();
-      if (d > 2.4) return;
+      if (d > range) return;
       const dot = to.normalize().dot(p.forward);
-      if (dot < 0.8) return;
+      if (dot < minDot) return;
       const score = dot - d * 0.05;
-      if (score > bestScore && this.physics.clearLine(p.eye, pos)) { best = { kind, ref }; bestScore = score; }
+      const probe = to.set(0, 0, 0).copy(pos).lerp(p.eye, Math.min(0.5, 0.45 / d));
+      if (score > bestScore && this.physics.clearLine(p.eye, probe)) { best = { kind, ref }; bestScore = score; }
     };
     for (const k of this.pickups) if (!k.taken) consider(k.pos, 'pickup', k);
-    consider(new THREE.Vector3(this.exit.x, 1.2, this.exit.z - 0.2), 'exit', null);
+    consider(new THREE.Vector3(this.level.hearth.x, 0.7, this.level.hearth.z - 0.2), 'hearth', null, 3.0, 0.72);
     return best;
   }
 
@@ -319,7 +318,7 @@ export class Game {
     if (this.state !== 'playing') return;
     const t = this.findTarget();
     if (!t) return;
-    if (t.kind === 'exit') { this.tryExit(); return; }
+    if (t.kind === 'hearth') { this.feedFire(); return; }
     const k = t.ref;
     if (k.type === 'note') {
       this.audio.play('paper', 0.5);
@@ -329,6 +328,27 @@ export class Game {
       ui.note(k.text);
       return;
     }
+    if (k.type === 'pile') {
+      if (this.logs >= MAX_CARRY) { ui.toast('Your arms are full.', 1600); return; }
+      this.logs++;
+      k.n--;
+      k.meshes[k.n].visible = false;
+      if (k.n === 0) k.taken = true;
+      this.audio.play('slam3', 0.22, 1.7);
+      this.enemy.hear(k.pos, 5);
+      return;
+    }
+    if (k.type === 'chair') {
+      k.taken = true;
+      k.obj.visible = false;
+      this.physics.removeBlocker(k.id);
+      this.fuel = Math.min(MAX_FUEL, this.fuel + CHAIR_FUEL);
+      this.audio.play('glass', 0.35, 0.55);
+      this.audio.play('slam2', 0.5, 1.2);
+      this.enemy.hear(this.player.pos, 15);
+      ui.toast('You smash the chair into the fire. It will hear that.', 3200);
+      return;
+    }
     k.taken = true;
     k.obj.visible = false;
     if (k.type === 'battery') {
@@ -336,13 +356,22 @@ export class Game {
       this.batteriesUsed++;
       this.audio.play('key2', 0.5, 1.4);
       ui.toast('Torch cell +35%', 2200);
-    } else {
-      this.keysFound++;
-      this.audio.play('key1', 0.7);
-      this.enemy.hear(k.pos, 10);
-      this.onKey(k.index);
-      this.updateObjective();
     }
+  }
+
+  feedFire() {
+    if (this.logs <= 0) {
+      ui.toast(this.fuel > 0 ? 'The fire needs wood. Bring logs from the sheds.' : 'Cold ashes. You need wood.', 2200);
+      return;
+    }
+    if (this.fuel >= MAX_FUEL - 5) { ui.toast('The fire is roaring already.', 1500); return; }
+    this.logs--;
+    this.logsBurned++;
+    const wasOut = this.fuel <= 0;
+    this.fuel = Math.min(MAX_FUEL, this.fuel + LOG_FUEL);
+    this.audio.play('slam3', 0.3, 1.1);
+    this.outageToast = false;
+    if (wasOut) ui.toast('The embers catch. Light returns.', 2500);
   }
 
   closeNote() {
@@ -352,49 +381,6 @@ export class Game {
     ui.screen(null);
   }
 
-  onKey(index) {
-    const e = this.enemy;
-    e.speedBoost = index;
-    this.flashT = 3;
-    if (index === 1) {
-      ui.toast('A door slams somewhere in the dark. Something is awake.', 5000);
-      this.farSound(pick(['slam1', 'slam2']), 0.9);
-      e.wake();
-    } else if (index === 2) {
-      ui.toast('The corridor lights are dying.', 4500);
-      this.lamps.forEach((l, i) => { if (i < 15 && Math.random() < 0.7) { l.dead = true; l.on = false; this.setLampVisual(l, false); } });
-      this.farSound('howl', 0.9);
-    } else {
-      ui.toast('An alarm starts. It knows where you are.', 5000);
-      this.alarm = true;
-      e.hunt = true;
-      e.huntT = 4;
-      this.audio.loop('alarm', 'alarm', 0.2);
-      this.lampMatOn.emissive.set(0xff1a10);
-      this.lampMatOn.color.set(0xff8a80);
-    }
-  }
-
-  tryExit() {
-    if (this.exit.open) return;
-    if (this.keysFound < 3) {
-      ui.toast(`Locked. ${3 - this.keysFound} key${3 - this.keysFound > 1 ? 's' : ''} missing.`, 2500);
-      this.audio.play('metal2', 0.4, 0.8);
-      return;
-    }
-    this.exit.open = true;
-    this.audio.play('key2', 0.7, 0.9);
-    this.enemy.hear(this.player.pos, 20);
-    setTimeout(() => {
-      this.audio.play('doorOpen', 0.9, 0.7);
-      this.doorAction.reset().play();
-      this.physics.removeBlocker('exit');
-      this.tint(this.lockModel, 0x30ff60, 0.9);
-    }, 700);
-    this.updateObjective();
-    ui.toast('The shutters grind open. Run!', 4000);
-  }
-
   farSound(key, volume) {
     const wp = this.level.waypoints.filter((w) => w.distanceTo(this.player.pos) > 12);
     if (!wp.length) return;
@@ -402,32 +388,46 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ per-frame
-  updateLamps(dt) {
-    const eye = this.player.eye;
-    for (const l of this.lamps) {
-      if (l.dead) continue;
-      l.next -= dt;
-      if (l.next <= 0 && l.flicker <= 0) {
-        const stress = 1 + this.keysFound * 0.6;
-        if (Math.random() < 0.18 * stress) l.flicker = rand(0.25, 0.9);
-        l.next = rand(2, 9) / stress;
+  updateNight(dt) {
+    const p = this.time / this.nightLen;
+    this.phase = p;
+    // fuel burns faster as the cold deepens
+    if (this.fuel > 0) {
+      this.fuel = Math.max(0, this.fuel - dt * (1 + 0.5 * Math.min(p, 1)));
+      if (this.fuel <= 0 && !this.outageToast) {
+        this.outageToast = true;
+        ui.toast('The fire is out. The dark is closing in.', 4000);
+        this.farSound('howl', 0.8);
       }
-      if (this.flashT > 0 && Math.random() < dt * 4) l.flicker = Math.max(l.flicker, rand(0.2, 0.5));
-      let on = true;
-      if (l.flicker > 0) { l.flicker -= dt; on = Math.random() > 0.45; }
-      if (on !== l.on) { l.on = on; this.setLampVisual(l, on); }
     }
-    this.flashT = Math.max(0, this.flashT - dt);
+    const e = this.enemy;
+    if (p > 0.33 && e.speedBoost < 1) { e.speedBoost = 1; ui.toast('The cold deepens. Something circles closer.', 4000); this.farSound('monster2', 0.9); }
+    if (p > 0.55 && e.speedBoost < 2) { e.speedBoost = 2; e.hunt = true; e.huntT = 3; ui.toast('It has your scent now.', 4000); this.farSound('howl', 0.9); }
+    if (p > 0.8 && e.speedBoost < 3) { e.speedBoost = 3; ui.toast('The sky is paling in the east. Hold on.', 4500); }
+    if (p >= 1 && !this.dawnStarted) {
+      this.dawnStarted = true;
+      e.flee();
+      ui.toast('Dawn. It screams and runs for the trees.', 5000);
+    }
+    if (this.dawnStarted) { this.dawnT += dt; if (this.dawnT > 7 && this.state === 'playing') this.win(); }
+    this.updateObjective();
+  }
 
-    const alive = this.lamps.filter((l) => !l.dead && l.on).sort((a, b) => a.pos.distanceToSquared(eye) - b.pos.distanceToSquared(eye));
-    const pulse = this.alarm ? 0.55 + 0.45 * Math.sin(this.time * 6) : 1;
-    const color = this.alarm ? 0xff2a1a : 0xffb96b;
-    this.lampLights.forEach((light, i) => {
-      const l = alive[i];
-      if (l && l.pos.distanceTo(eye) < 16) { light.position.copy(l.pos); light.intensity = 14 * pulse; light.color.setHex(color); }
-      else light.intensity = 0;
-    });
-    this.lampMatOn.emissiveIntensity = this.alarm ? 1.0 + 1.0 * pulse : 1.7;
+  updateAtmosphere(dt) {
+    // sky and fog drift toward dawn over the last 15% of the night
+    const k = THREE.MathUtils.smoothstep(this.phase, 0.82, 1.02);
+    const col = NIGHT_COLOR.clone().lerp(DAWN_COLOR, k);
+    this.scene.background.copy(SKY_NIGHT).lerp(DAWN_COLOR, k);
+    this.scene.fog.color.copy(col);
+    this.scene.fog.density = THREE.MathUtils.lerp(0.027, 0.018, k);
+    this.ambient.intensity = 0.5 + 0.9 * k;
+    this.fire.update(dt, this.fuel, this.time);
+    const inside = this.insideLodge();
+    this.snow.update(dt, this.camera.position, this.time, !inside);
+    // sounds
+    const d = this.player.pos.distanceTo(this.level.hearth);
+    this.audio.setLoopVolume('fire', this.fuel > 0 ? 0.55 * this.fireLevel() * Math.max(0, 1 - d / 24) + 0.04 : 0.0);
+    this.audio.setLoopVolume('wind', inside ? 0.07 : 0.22);
   }
 
   updateFlashlight() {
@@ -440,7 +440,7 @@ export class Game {
   updateFx(dt) {
     const e = this.enemy;
     let fear = 0;
-    if (e.state !== STATE.DORMANT) {
+    if (e.state !== STATE.DORMANT && e.state !== STATE.FLEE) {
       const d = e.distToPlayer();
       fear = THREE.MathUtils.clamp(1 - d / 16, 0, 1);
       if (e.state === STATE.CHASE) fear = Math.max(fear, 0.55);
@@ -458,40 +458,42 @@ export class Game {
   updateAmbientScares(dt) {
     this.stingerT -= dt;
     if (this.stingerT > 0) return;
-    this.stingerT = rand(14, 32) * (1 - this.keysFound * 0.15);
-    if (Math.random() < 0.45) this.farSound(pick(['slam1', 'slam2', 'slam3', 'metal1', 'glass']), 0.8);
+    this.stingerT = rand(14, 30) * (1 - this.phase * 0.4);
+    if (Math.random() < 0.4) this.farSound(pick(['slam1', 'slam2', 'slam3', 'metal1', 'glass']), 0.7);
     else this.farSound(pick(['weird5', 'weird9', 'weird12', 'weird17', 'weird21', 'weird26']), 0.7);
   }
 
   updatePickups(dt) {
     const t = this.time;
     for (const k of this.pickups) {
-      if (k.taken) continue;
-      if (k.spin) { k.obj.rotation.y += dt * 1.4; k.obj.position.y = k.baseY + Math.sin(t * 2 + k.pos.x) * 0.04; }
+      if (k.taken || !k.spin) continue;
+      k.obj.rotation.y += dt * 1.4; k.obj.position.y = k.baseY + Math.sin(t * 2 + k.pos.x) * 0.04;
     }
     const target = this.state === 'playing' ? this.findTarget() : null;
     let text = null;
     if (target) {
-      if (target.kind === 'exit') text = this.keysFound >= 3 && !this.exit.open ? '[E] Unlock exit' : this.exit.open ? null : '[E] Try the lock';
-      else text = { key: '[E] Take key', battery: '[E] Take torch cell', note: '[E] Read note' }[target.ref.type];
+      if (target.kind === 'hearth') text = this.logs > 0 ? `[E] Feed the fire (${this.logs} log${this.logs > 1 ? 's' : ''})` : '[E] Check the fire';
+      else {
+        const r = target.ref;
+        text = { pile: `[E] Take a log (${r.n} left here)`, chair: '[E] Smash the chair for fuel (loud)', battery: '[E] Take torch cell', note: '[E] Read note' }[r.type];
+      }
     }
     ui.setPrompt(text);
   }
 
   step() {
     const dt = Math.min(this.clock.getDelta(), 0.05);
-    this.doorMixer.update(dt);
     if (this.state === 'playing' || this.state === 'note' || this.state === 'dying') {
       this.time += dt;
       this.player.update(dt);
       this.enemy.update(dt);
-      this.updateLamps(dt);
+      if (this.state !== 'dying') this.updateNight(dt);
+      this.updateAtmosphere(dt);
       this.updateFlashlight();
       this.updateFx(dt);
       this.updatePickups(dt);
       this.updateAmbientScares(dt);
-      ui.hud({ battery: this.player.battery, stamina: this.player.stamina, keys: this.keysFound });
-      if (this.state === 'playing' && this.exit.open && this.player.pos.z > this.exit.z + 1.0) this.win();
+      ui.hud({ battery: this.player.battery, stamina: this.player.stamina, fire: this.fireLevel(), fuel: this.fuel, logs: this.logs, max: MAX_CARRY, clock: this.clockText() });
       if (this.state === 'dying') {
         this.deadT += dt;
         const e = this.enemy;
@@ -503,8 +505,10 @@ export class Game {
         if (this.deadT > 1.4) this.die();
       }
     } else if (this.state === 'title' || this.state === 'paused' || this.state === 'dead' || this.state === 'won') {
-      // keep the scene alive behind the menu
-      if (this.state === 'title') this.camera.position.set(this.level.spawn.pos.x, 1.6, this.level.spawn.pos.z);
+      if (this.state === 'title') {
+        this.camera.position.set(this.level.spawn.pos.x, 1.6, this.level.spawn.pos.z);
+        this.fire.update(dt, this.fuel, performance.now() / 1000);
+      }
     }
     this.composer.render(dt);
   }

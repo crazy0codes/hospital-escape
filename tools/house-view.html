@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><title>hview</title><style>body{margin:0;background:#222}canvas{display:block}</style></head>
+<body><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const S = 10;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(960, 720); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x2c2f36);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 2.2));
+const d = new THREE.DirectionalLight(0xffffff, 1.5); d.position.set(3, 8, 4); scene.add(d);
+const gltf = await new GLTFLoader().loadAsync('/tools/user-models/kit.glb');
+const root = gltf.scene; root.scale.setScalar(S); scene.add(root); root.updateMatrixWorld(true);
+const hideRe = new RegExp(q.get('hide') || '^(roof|roofbottom|curveroof|curveroofbottom|rooftop|triangle|Triangle)$', 'i');
+const maxY = parseFloat(q.get('maxy') || '99');
+const v = new THREE.Vector3(); const info = { n: 0, hidden: 0 };
+root.traverse((o) => { if (!o.isMesh) return; const nm = o.name.replace(/_Material.*$/, '').replace(/\d+$/, '').replace(/_$/, '');
+  const b = new THREE.Box3().setFromObject(o); b.getCenter(v);
+  if (v.x < 9.5) { o.visible = false; return; }
+  info.n++; if (hideRe.test(nm) || v.y > maxY) { o.visible = false; info.hidden++; } });
+const box = new THREE.Box3(); root.traverse((o) => { if (o.isMesh && o.visible) box.expandByObject(o); });
+info.min = box.min.toArray().map((x) => +x.toFixed(2)); info.max = box.max.toArray().map((x) => +x.toFixed(2));
+const c = box.getCenter(new THREE.Vector3());
+const cam = new THREE.PerspectiveCamera(parseFloat(q.get('fov') || '40'), 960 / 720, 0.05, 200);
+const p = (q.get('cam') || '').split(',').map(Number), l = (q.get('look') || '').split(',').map(Number);
+if (p.length === 3) { cam.position.set(...p); cam.lookAt(...(l.length === 3 ? l : c.toArray())); }
+else { cam.position.set(c.x, c.y + 28, c.z + 0.01); cam.lookAt(c); }
+renderer.render(scene, cam);
+window.__info = info; document.title = 'done';
+</script></body></html>

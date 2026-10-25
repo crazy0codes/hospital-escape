@@ -4,13 +4,10 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const BASE = import.meta.env.BASE_URL;
 
 export const MODEL_NAMES = [
-  'furniture/wall', 'furniture/wallDoorway', 'furniture/floorFull',
   'furniture/bedSingle', 'furniture/bedDouble', 'furniture/sideTable', 'furniture/sideTableDrawers',
   'furniture/desk', 'furniture/chair', 'furniture/chairDesk', 'furniture/bookcaseClosed', 'furniture/bookcaseOpen',
-  'furniture/kitchenCabinet', 'furniture/lampSquareCeiling',
-  'furniture/trashcan', 'furniture/cardboardBoxClosed', 'furniture/rugRectangle', 'furniture/books',
-  'enemy/wendigo', 'platformer/key', 'platformer/lock', 'prototype/door-sliding-double-wide',
-  'food/can-small',
+  'furniture/kitchenCabinet', 'furniture/trashcan', 'furniture/cardboardBoxClosed', 'furniture/rugRectangle', 'furniture/books',
+  'enemy/wendigo', 'food/can-small',
 ];
 
 export const SOUND_FILES = {

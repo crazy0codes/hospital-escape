@@ -1,4 +1,4 @@
-# St. Aldric: Night Shift Never Ended
+# Hunger Moon (branch of the St. Aldric hospital game)
 
 First-person 3D horror in the browser. You wake in a closed hospital at night. One stalker hunts you. Find 3 keys, unlock the exit, get out. About 10 to 15 minutes.
 
@@ -29,13 +29,12 @@ Use Chrome, Edge or Firefox with headphones. Sounds are `.ogg`; browsers without
 | Esc | Pause |
 | R | Restart (after death or win) |
 
-## How it plays
+## How it plays (Hunger Moon branch)
 
-- Keys are in Ward A (north), the Pharmacy (north east) and the Boiler Room (south west). The exit is at the south end.
-- The torch drains. Spare cells (green cans) give +35%.
-- The Patient hears running (12 m) and walking (5 m), and sees you in its view cone (14 m, or 8 m if you stand still with the torch off).
-- Holding the torch beam on it for about a second makes it flinch for a few seconds. It then comes back, so use it to get away, not to win.
-- Each key makes the hospital worse: key 1 wakes it, key 2 kills corridor lights and speeds it up, key 3 starts an alarm and it hunts you.
+- You are snowed in at a lodge. The wendigo will not cross the light of a strong fire, and the stronger the fire, the wider that circle.
+- The fire burns down faster as the night goes on. Logs (E) are in the sheds and garage around the yard; carry up to 4 and feed the hearth (E). Smashing a chair gives a little fuel but is loud.
+- Torch cells, and notes that tell the story, are scattered around. Hold the torch beam on the creature to make it flinch.
+- Survive until dawn (about 9 minutes). Add `?night=120` to the URL for a shorter test night.
 
 ## Stack
 

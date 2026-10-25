@@ -6,7 +6,7 @@ export const ui = {
   el: {
     hud: $('hud'), objective: $('objective'), prompt: $('prompt'), toast: $('toast'),
     batteryBar: $('batteryBar'), batteryPct: $('batteryPct'), staminaBar: $('staminaBar'), keys: $('keys'),
-    noteText: $('noteText'), loadBar: $('loadBar'), loadText: $('loadText'), deadText: $('deadText'), winText: $('winText'),
+    noteText: $('noteText'), fireBar: $('fireBar'), fireSecs: $('fireSecs'), clock: $('clockText'), loadBar: $('loadBar'), loadText: $('loadText'), deadText: $('deadText'), winText: $('winText'),
   },
   _toastTimer: 0,
 
@@ -40,11 +40,15 @@ export const ui = {
     this.screen(text ? 'note' : null);
   },
 
-  hud({ battery, stamina, keys }) {
+  hud({ battery, stamina, fire, fuel, logs, max, clock }) {
     this.el.batteryBar.style.transform = `scaleX(${Math.max(0, battery / 100)})`;
     this.el.batteryBar.classList.toggle('low', battery < 20);
     this.el.batteryPct.textContent = `${Math.ceil(battery)}%`;
     this.el.staminaBar.style.transform = `scaleX(${Math.max(0, stamina)})`;
-    this.el.keys.textContent = `KEYS ${keys} / 3`;
+    this.el.fireBar.style.transform = `scaleX(${Math.max(0, fire)})`;
+    this.el.fireBar.classList.toggle('low', fuel < 20);
+    this.el.fireSecs.textContent = `${Math.ceil(fuel)}s`;
+    this.el.keys.textContent = `LOGS ${logs} / ${max}`;
+    this.el.clock.textContent = clock;
   },
 };

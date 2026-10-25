@@ -22,8 +22,32 @@ export class GameAudio {
       try { this.buffers[key] = await ctx.decodeAudioData(buf.slice(0)); }
       catch (e) { console.warn(`could not decode sound ${key}`, e); }
     }));
+    this.makeProcedural(ctx);
     this.ready = true;
     this.listener.setMasterVolume(0.9);
+  }
+
+  /** Fire crackle and wind are synthesised, so no sound files are needed for them. */
+  makeProcedural(ctx) {
+    const rate = ctx.sampleRate, len = rate * 6;
+    const fire = ctx.createBuffer(1, len, rate);
+    const f = fire.getChannelData(0);
+    let b = 0;
+    for (let i = 0; i < len; i++) { b = (b + (Math.random() * 2 - 1) * 0.02) * 0.995; f[i] = b * 1.4; }
+    for (let k = 0; k < 90; k++) { // pops
+      const at = Math.floor(Math.random() * (len - 600)), amp = 0.2 + Math.random() * 0.7, dec = 40 + Math.random() * 160;
+      for (let i = 0; i < 600; i++) f[at + i] += (Math.random() * 2 - 1) * amp * Math.exp(-i / dec);
+    }
+    const wind = ctx.createBuffer(1, len, rate);
+    const w = wind.getChannelData(0);
+    let l1 = 0, l2 = 0;
+    for (let i = 0; i < len; i++) {
+      l1 += ((Math.random() * 2 - 1) - l1) * 0.012; l2 += (l1 - l2) * 0.05;
+      const gust = 0.55 + 0.45 * Math.sin((i / rate) * (Math.PI * 2 / 6) * 1) * Math.sin((i / rate) * 2.1);
+      w[i] = l2 * 5 * gust;
+    }
+    this.buffers.crackle = fire;
+    this.buffers.wind = wind;
   }
 
   suspend() { this.listener?.context.suspend(); }

@@ -9,7 +9,7 @@ const STUN_SECONDS = 2.5;
 const STUN_COOLDOWN = 8;
 const BEAM_NEEDED = 1.2;
 
-export const STATE = { DORMANT: 'dormant', PATROL: 'patrol', INVESTIGATE: 'investigate', CHASE: 'chase', SEARCH: 'search', STUNNED: 'stunned', KILL: 'kill' };
+export const STATE = { DORMANT: 'dormant', PATROL: 'patrol', INVESTIGATE: 'investigate', CHASE: 'chase', SEARCH: 'search', STUNNED: 'stunned', KILL: 'kill', FLEE: 'flee' };
 
 export class Enemy {
   constructor({ models, scene, level, query, physics, audio, player }) {
@@ -18,6 +18,8 @@ export class Enemy {
     this.physics = physics;
     this.audio = audio;
     this.player = player;
+    this.hearth = level.hearth;
+    this.safeRadius = () => 0; // set by the game: metres around the hearth it will not enter
 
     this.root = new THREE.Group();
     this.creature = new Creature(models['enemy/wendigo']);
@@ -57,6 +59,10 @@ export class Enemy {
     this.speedBoost = 0; // grows with keys
     this.canSeePlayer = false;
     this.killT = 0;
+    this.root.visible = true;
+    this.gone = false;
+    this.wakeAt = 35;
+    this.repelled = false;
     this.play('idle');
     this.lastX = this.pos.x; this.lastZ = this.pos.z; this.speedNow = 0;
     this.apply();
@@ -104,6 +110,11 @@ export class Enemy {
     if (d < 0.2) { this.path.shift(); return this.path.length > 0; }
     this.face(Math.atan2(dx, dz), dt, turn);
     const step = Math.min(speed * dt, d);
+    const R = this.safeRadius();
+    if (R > 0 && this.state !== STATE.FLEE) {
+      const nx = this.pos.x + (dx / d) * step, nz = this.pos.z + (dz / d) * step;
+      if (Math.hypot(nx - this.hearth.x, nz - this.hearth.z) < R) { this.path = []; return false; }
+    }
     this.pos.x += (dx / d) * step;
     this.pos.z += (dz / d) * step;
     this.stepDist += step;
@@ -193,13 +204,15 @@ export class Enemy {
     if (this.state === STATE.DORMANT) {
       this.sinceWake += dt;
       this.play('idle');
-      if (this.sinceWake > 90) this.wake();
+      if (this.sinceWake > this.wakeAt) this.wake();
       else if (dist < 4 && this.sees()) this.wake();
       this.apply();
       return;
     }
 
+    if (this.state === STATE.FLEE) { this.updateFlee(dt); this.apply(); return; }
     this.canSeePlayer = this.sees();
+    this.repel(dt);
 
     // ---- flashlight stun
     if (this.player.flashlightOn && this.state !== STATE.STUNNED && this.stunCooldown <= 0) {
@@ -229,6 +242,36 @@ export class Enemy {
 
     this.sound(dt, dist);
     this.apply();
+  }
+
+  /** The firelight pushes it back: it cannot stand inside the safe radius. */
+  repel(dt) {
+    const R = this.safeRadius();
+    this.repelled = false;
+    if (R <= 0 || this.state === STATE.KILL) return;
+    const dx = this.pos.x - this.hearth.x, dz = this.pos.z - this.hearth.z;
+    const d = Math.hypot(dx, dz);
+    if (d >= R) return;
+    this.repelled = true;
+    this.path = [];
+    const step = Math.min(R - d + 0.05, 4 * dt);
+    this.pos.x += (dx / (d || 1)) * step;
+    this.pos.z += (dz / (d || 1)) * step;
+    this.play('emote-no');
+  }
+
+  flee() {
+    if (this.state === STATE.FLEE || this.state === STATE.KILL) return;
+    this.setState(STATE.FLEE);
+    this.goTo(this.level.cellToWorld(0.5, 0.5).add(new THREE.Vector3(-40, 0, -40)));
+    if (!this.path.length) this.path = [new THREE.Vector3(-30, 0, -30)];
+    this.audio.playAt(this.root, 'howl', { volume: 1, rate: 0.6, ref: 8, max: 80 });
+  }
+
+  updateFlee(dt) {
+    const moving = this.follow(dt, 6.5, 8);
+    this.play('sprint');
+    if (!moving || this.distToPlayer() > 45) { this.root.visible = false; this.gone = true; }
   }
 
   patrolSpeed() { return 1.6 + 0.4 * Math.min(this.speedBoost, 2) * 0.5 + (this.speedBoost >= 2 ? 0.2 : 0); }
@@ -280,14 +323,24 @@ export class Enemy {
     if (this.canSeePlayer) { this.loseTimer = 0; this.lastKnown.copy(this.player.pos); }
     else this.loseTimer += dt;
 
+    const R = this.safeRadius();
+    const playerIn = R > 0 && Math.hypot(this.player.pos.x - this.hearth.x, this.player.pos.z - this.hearth.z) < R + 0.2;
+    if (playerIn && this.canSeePlayer) this.loseTimer = 0;
     this.repath -= dt;
     if (this.repath <= 0) {
       this.repath = 0.3;
-      this.goTo(this.canSeePlayer ? this.player.pos : this.lastKnown);
+      if (playerIn) {
+        // prowl at the edge of the firelight, watching
+        const dx = this.pos.x - this.hearth.x, dz = this.pos.z - this.hearth.z, d = Math.hypot(dx, dz) || 1;
+        this.goTo(new THREE.Vector3(this.hearth.x + (dx / d) * (R + 1.0), 0, this.hearth.z + (dz / d) * (R + 1.0)));
+      } else this.goTo(this.canSeePlayer ? this.player.pos : this.lastKnown);
     }
     const speed = THREE.MathUtils.lerp(2.0, this.chaseSpeed(), Math.min(this.chaseTime / 2, 1));
     const moving = this.follow(dt, speed, 9);
-    this.play('sprint');
+    if (playerIn && (!moving || this.repelled)) {
+      this.face(Math.atan2(this.player.pos.x - this.pos.x, this.player.pos.z - this.pos.z), dt, 5);
+      if (!this.repelled) this.play('idle');
+    } else this.play('sprint');
     if (!moving && !this.canSeePlayer) { this.beginSearch(); return; }
     if (this.loseTimer > 6 || this.distToPlayer() > 25) this.beginSearch();
   }
